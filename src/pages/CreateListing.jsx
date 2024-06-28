@@ -7,14 +7,15 @@ import {
   uploadBytesResumable,
   getDownloadURL,
 } from "firebase/storage";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase.config";
 import { useNavigate } from "react-router-dom";
-import Spinner from "../components/Spinner";
 import { toast } from "react-toastify";
 import { v4 as uuidv4 } from "uuid";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import Spinner from "../components/Spinner";
+
 function CreateListing() {
-  //eslint-disable-next-line
+  // eslint-disable-next-line
   const [geolocationEnabled, setGeolocationEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -32,6 +33,7 @@ function CreateListing() {
     latitude: 0,
     longitude: 0,
   });
+
   const {
     type,
     name,
@@ -51,6 +53,7 @@ function CreateListing() {
   const auth = getAuth();
   const navigate = useNavigate();
   const isMounted = useRef(true);
+
   useEffect(() => {
     if (isMounted) {
       onAuthStateChanged(auth, (user) => {
@@ -61,25 +64,30 @@ function CreateListing() {
         }
       });
     }
+
     return () => {
       isMounted.current = false;
     };
-    //eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMounted]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
+
     setLoading(true);
-    if (discountedPrice >= regularPrice) {
+
+    if (+discountedPrice >= +regularPrice) {
       setLoading(false);
       toast.error("Discounted price needs to be less than regular price");
       return;
     }
+
     if (images.length > 6) {
       setLoading(false);
       toast.error("Max 6 images");
       return;
     }
+
     let geolocation = {};
     let location;
 
@@ -103,12 +111,11 @@ function CreateListing() {
       geolocation.lon = data.features[0].properties.lon ?? 0;
     } else {
       geolocation.lat = latitude;
-      geolocation.lng = longitude;
+      geolocation.lon = longitude;
       location = address;
     }
-
-    // Store images in firebase
-    const storageImage = async (image) => {
+    // Store image in firebase
+    const storeImage = async (image) => {
       return new Promise((resolve, reject) => {
         const storage = getStorage();
         const fileName = `${auth.currentUser.uid}-${image.name}-${uuidv4()}`;
@@ -131,13 +138,15 @@ function CreateListing() {
                 console.log("Upload is running");
                 break;
               default:
-                console.log("Uploading");
+                break;
             }
           },
           (error) => {
             reject(error);
           },
           () => {
+            // Handle successful uploads on complete
+            // For instance, get the download URL: https://firebasestorage.googleapis.com/...
             getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
               resolve(downloadURL);
             });
@@ -145,23 +154,25 @@ function CreateListing() {
         );
       });
     };
+
     const imgUrls = await Promise.all(
-      [...images].map((image) => storageImage(image))
+      [...images].map((image) => storeImage(image))
     ).catch(() => {
       setLoading(false);
       toast.error("Images not uploaded");
       return;
     });
+
     const formDataCopy = {
       ...formData,
       imgUrls,
       geolocation,
       timestamp: serverTimestamp(),
     };
+
     formDataCopy.location = address;
     delete formDataCopy.images;
     delete formDataCopy.address;
-
     !formDataCopy.offer && delete formDataCopy.discountedPrice;
 
     const docRef = await addDoc(collection(db, "listings"), formDataCopy);
@@ -176,12 +187,11 @@ function CreateListing() {
     if (e.target.value === "true") {
       boolean = true;
     }
-
     if (e.target.value === "false") {
       boolean = false;
     }
 
-    //Files
+    // Files
     if (e.target.files) {
       setFormData((prevState) => ({
         ...prevState,
@@ -189,6 +199,7 @@ function CreateListing() {
       }));
     }
 
+    // Text/Booleans/Numbers
     if (!e.target.files) {
       setFormData((prevState) => ({
         ...prevState,
@@ -239,7 +250,7 @@ function CreateListing() {
             value={name}
             onChange={onMutate}
             maxLength="32"
-            minLength="5"
+            minLength="10"
             required
           />
 
